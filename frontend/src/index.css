@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-division-dark text-division-light;
+}
+
+/* Custom utility classes */
+.bg-division {
+  @apply bg-division-red;
+}
+
+.text-division {
+  @apply text-division-red;
+}
+
+.border-division {
+  @apply border-division-red;
+}
