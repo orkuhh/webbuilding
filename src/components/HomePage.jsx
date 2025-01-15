@@ -1,4 +1,6 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import BuildCard from './BuildCard';
 
 const MOCK_BUILDS = [
@@ -40,7 +42,26 @@ const MOCK_BUILDS = [
   }
 ];
 
-const HomePage = () => {
+export default function HomePage() {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  const handleCreateBuild = () => {
+    if (isAuthenticated) {
+      navigate('/create');
+    } else {
+      navigate('/login', { state: { from: '/create' } });
+    }
+  };
+
+  const handleBrowseBuilds = () => {
+    navigate('/builds');
+  };
+
+  const handleViewAllBuilds = () => {
+    navigate('/builds');
+  };
+
   return (
     <div className="container mx-auto px-4">
       {/* Hero Section */}
@@ -55,12 +76,14 @@ const HomePage = () => {
           <button 
             type="button"
             className="bg-division-orange text-black px-6 py-3 rounded font-medium hover:bg-division-orange/90 transition-colors"
+            onClick={handleCreateBuild}
           >
             Create New Build
           </button>
           <button 
             type="button"
             className="bg-black/50 text-division-light px-6 py-3 rounded font-medium hover:bg-black/70 transition-colors"
+            onClick={handleBrowseBuilds}
           >
             Browse All Builds
           </button>
@@ -74,6 +97,7 @@ const HomePage = () => {
           <button 
             type="button"
             className="text-division-light/60 hover:text-division-orange transition-colors text-sm"
+            onClick={handleViewAllBuilds}
           >
             View All →
           </button>
@@ -92,6 +116,7 @@ const HomePage = () => {
           <button 
             type="button"
             className="text-division-light/60 hover:text-division-orange transition-colors text-sm"
+            onClick={handleViewAllBuilds}
           >
             View All →
           </button>
@@ -104,6 +129,4 @@ const HomePage = () => {
       </div>
     </div>
   );
-};
-
-export default HomePage; 
+} 

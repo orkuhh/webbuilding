@@ -1,165 +1,232 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import AuthInput from './AuthInput';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-const RegisterPage = () => {
+export default function RegisterPage() {
+  const navigate = useNavigate();
+  const { signUp, loading, error: authError } = useAuth();
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    agreeToTerms: false
   });
-
-  const [errors, setErrors] = useState({});
+  const [validationError, setValidationError] = useState('');
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }));
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
+    setValidationError('');
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Basic validation
-    const newErrors = {};
+  const validateForm = () => {
     if (!formData.username) {
-      newErrors.username = 'Username is required';
+      setValidationError('Username is required');
+      return false;
     }
     if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email';
+      setValidationError('Email is required');
+      return false;
+    }
+    if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      setValidationError('Please enter a valid email address');
+      return false;
     }
     if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
+      setValidationError('Password is required');
+      return false;
+    }
+    if (formData.password.length < 8) {
+      setValidationError('Password must be at least 8 characters long');
+      return false;
     }
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+      setValidationError('Passwords do not match');
+      return false;
     }
+    if (!formData.agreeToTerms) {
+      setValidationError('You must agree to the Terms of Service');
+      return false;
+    }
+    return true;
+  };
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
       return;
     }
 
-    // TODO: Handle registration logic
-    console.log('Registration attempt:', formData);
+    try {
+      const { error } = await signUp({
+        email: formData.email,
+        password: formData.password,
+        username: formData.username
+      });
+
+      if (!error) {
+        navigate('/');
+      }
+    } catch (err) {
+      setValidationError(err.message);
+    }
   };
 
   return (
-    <div className="min-h-[calc(100vh-theme(spacing.32))] flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-division-orange mb-2">Join The Division</h1>
-          <p className="text-division-light/60">
-            Create an account to start building and sharing loadouts
-          </p>
+    <div className="min-h-[80vh] flex items-center justify-center">
+      <div className="w-full max-w-md space-y-8 p-8 card">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-white">Create an account</h2>
+          <p className="mt-2 text-gray-400">Join the Division Builds community</p>
         </div>
 
-        {/* Registration Form */}
-        <div className="bg-black/40 backdrop-blur-sm p-8 rounded-lg border border-division-orange/10">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <AuthInput
-              label="Username"
-              type="text"
-              placeholder="AgentSmith"
-              value={formData.username}
-              onChange={handleChange}
-              error={errors.username}
-            />
+        {(authError || validationError) && (
+          <div className="p-4 text-red-500 bg-red-500/10 rounded-lg">
+            {authError || validationError}
+          </div>
+        )}
 
-            <AuthInput
-              label="Email Address"
-              type="email"
-              placeholder="agent@shdtech.com"
-              value={formData.email}
-              onChange={handleChange}
-              error={errors.email}
-            />
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-300">
+                Username
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                required
+                value={formData.username}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-lg bg-division-dark-lighter border border-gray-600 text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-division-orange"
+                placeholder="Choose a username"
+              />
+            </div>
 
-            <AuthInput
-              label="Password"
-              type="password"
-              placeholder="••••••••"
-              value={formData.password}
-              onChange={handleChange}
-              error={errors.password}
-            />
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                Email address
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-lg bg-division-dark-lighter border border-gray-600 text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-division-orange"
+                placeholder="Enter your email"
+              />
+            </div>
 
-            <AuthInput
-              label="Confirm Password"
-              type="password"
-              placeholder="••••••••"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              error={errors.confirmPassword}
-            />
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                value={formData.password}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-lg bg-division-dark-lighter border border-gray-600 text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-division-orange"
+                placeholder="Create a password"
+              />
+            </div>
 
-            <div className="flex items-center text-sm">
-              <label className="flex items-center text-division-light/60">
-                <input type="checkbox" className="mr-2 rounded border-division-orange/20 bg-black/50" />
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300">
+                Confirm password
+              </label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-lg bg-division-dark-lighter border border-gray-600 text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-division-orange"
+                placeholder="Confirm your password"
+              />
+            </div>
+
+            <div className="flex items-center">
+              <input
+                id="agreeToTerms"
+                name="agreeToTerms"
+                type="checkbox"
+                checked={formData.agreeToTerms}
+                onChange={handleChange}
+                className="h-4 w-4 rounded border-gray-600 bg-division-dark-lighter text-division-orange focus:ring-division-orange"
+              />
+              <label htmlFor="agreeToTerms" className="ml-2 block text-sm text-gray-300">
                 I agree to the{' '}
-                <Link to="/terms" className="text-division-orange hover:text-division-orange/80 ml-1">
+                <Link to="/terms" className="text-division-orange hover:text-division-orange/80">
                   Terms of Service
+                </Link>
+                {' '}and{' '}
+                <Link to="/privacy" className="text-division-orange hover:text-division-orange/80">
+                  Privacy Policy
                 </Link>
               </label>
             </div>
-
-            <button
-              type="submit"
-              className="w-full bg-division-orange text-black py-2 rounded font-medium hover:bg-division-orange/90 transition-colors"
-            >
-              Create Account
-            </button>
-          </form>
-
-          <div className="mt-6 text-center text-division-light/60">
-            <span>Already have an account? </span>
-            <Link to="/login" className="text-division-orange hover:text-division-orange/80 transition-colors">
-              Sign in
-            </Link>
           </div>
-        </div>
 
-        {/* OAuth Options */}
-        <div className="mt-8">
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full btn-primary flex justify-center items-center"
+          >
+            {loading ? (
+              <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            ) : (
+              'Create account'
+            )}
+          </button>
+
+          <div className="text-center">
+            <p className="text-gray-400">
+              Already have an account?{' '}
+              <Link to="/login" className="text-division-orange hover:text-division-orange/80">
+                Sign in
+              </Link>
+            </p>
+          </div>
+
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-division-orange/10"></div>
+              <div className="w-full border-t border-gray-600" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-black text-division-light/40">Or continue with</span>
+              <span className="px-2 bg-division-dark text-gray-400">Or continue with</span>
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-3 gap-3">
-            {['Discord', 'Google', 'GitHub'].map((provider) => (
-              <button
-                key={provider}
-                type="button"
-                className="flex justify-center items-center px-4 py-2 border border-division-orange/10 rounded bg-black/40 hover:bg-black/60 transition-colors"
-              >
-                <span className="text-division-light/80 text-sm">{provider}</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              type="button"
+              className="btn-secondary flex items-center justify-center"
+              onClick={() => {/* TODO: Implement Discord OAuth */}}
+            >
+              Discord
+            </button>
+            <button
+              type="button"
+              className="btn-secondary flex items-center justify-center"
+              onClick={() => {/* TODO: Implement Google OAuth */}}
+            >
+              Google
+            </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
-};
-
-export default RegisterPage; 
+} 
