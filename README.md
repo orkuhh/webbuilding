@@ -98,9 +98,9 @@ We welcome contributions from the community! Please read our [Contributing Guide
 
 ## Community
 
-- [Discord Server](https://discord.gg/divisionbuilds)
-- [GitHub Issues](https://github.com/yourusername/divisionbuilds/issues)
-- [Twitter](https://twitter.com/divisionbuilds)
+
+- [GitHub Issues](https://github.com/orkuhh/divisionbuilds/issues)
+
 
 ## License
 
@@ -118,8 +118,6 @@ This project is not affiliated with or endorsed by Ubisoft. The Division® is a 
 
 ## Contact
 
-- Email: support@divisionbuilds.com
-- Twitter: [@divisionbuilds](https://twitter.com/divisionbuilds)
 - GitHub: [@divisionbuilds](https://github.com/divisionbuilds)
 
 ## Support
