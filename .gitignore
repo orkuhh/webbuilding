@@ -47,3 +47,7 @@ dist-ssr
 .DS_Store
 *.pem
 Thumbs.db
+
+# Convex
+convex/_generated/
+.env.local

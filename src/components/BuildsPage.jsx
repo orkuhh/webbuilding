@@ -1,101 +1,85 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import BuildCard from './BuildCard';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import BuildCard from './BuildCard'; // Assuming BuildCard is adapted for Convex data
 
-// Temporary mock data
-const mockBuilds = [
-  {
-    id: 1,
-    title: "DPS Negotiator's Dilemma",
-    author: "Agent Smith",
-    description: "High damage build focusing on critical hits and spreading damage across multiple targets using the Negotiator's Dilemma gear set.",
-    likes: 245,
-    views: 1820,
-    tags: ["PvE", "DPS", "Gear Set"],
-    primaryWeapon: "Police M4",
-    gearScore: 900,
-    updatedAt: "2024-03-15",
-    difficulty: "Advanced",
-    playstyle: "Aggressive"
-  },
-  {
-    id: 2,
-    title: "Tank True Patriot",
-    author: "Division Veteran",
-    description: "Survivability focused build using True Patriot to support the team and draw enemy attention.",
-    likes: 189,
-    views: 1240,
-    tags: ["PvE", "Tank", "Support"],
-    primaryWeapon: "ACS-12",
-    gearScore: 895,
-    updatedAt: "2024-03-14",
-    difficulty: "Intermediate",
-    playstyle: "Defensive"
-  },
-  // Add more mock builds as needed
-];
+// Define available games (can be fetched or static)
+const GAMES_OPTIONS = ["The Division 2", "The Division"]; // Example games
 
-const SORT_OPTIONS = {
-  popular: { label: "Most Popular", fn: (a, b) => b.views - a.views },
-  recent: { label: "Most Recent", fn: (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt) },
-  likes: { label: "Most Liked", fn: (a, b) => b.likes - a.likes },
-  gearScore: { label: "Gear Score", fn: (a, b) => b.gearScore - a.gearScore }
+// Sort options for Convex query
+const SORT_OPTIONS_CONVEX = {
+  creationTimeDesc: { label: "Most Recent", field: "_creationTime", order: "desc" },
+  // likesCountDesc: { label: "Most Liked", field: "likesCount", order: "desc" }, // Requires likesCount on build doc or a different query approach
+  titleAsc: { label: "Title (A-Z)", field: "title", order: "asc" },
+  titleDesc: { label: "Title (Z-A)", field: "title", order: "desc" },
+  // Add more as needed, e.g., by game
 };
 
-const DIFFICULTY_OPTIONS = ["Beginner", "Intermediate", "Advanced", "Expert"];
-const PLAYSTYLE_OPTIONS = ["Aggressive", "Defensive", "Support", "Balanced"];
 
 export default function BuildsPage() {
-  const [sortBy, setSortBy] = useState('popular');
-  const [filterTag, setFilterTag] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDifficulty, setSelectedDifficulty] = useState('all');
-  const [selectedPlaystyle, setSelectedPlaystyle] = useState('all');
+  const [currentSort, setCurrentSort] = useState('creationTimeDesc');
+  const [selectedGame, setSelectedGame] = useState('all'); // 'all' or a specific game title
+  const [searchQuery, setSearchQuery] = useState(''); // For client-side filtering for now
   const [showFilters, setShowFilters] = useState(false);
 
-  // Get unique tags from all builds
-  const allTags = useMemo(() => 
-    Array.from(new Set(mockBuilds.flatMap(build => build.tags))),
-    []
-  );
+  // Construct filters for the Convex query
+  const queryFilters = useMemo(() => {
+    const filters = {};
+    if (selectedGame !== 'all') {
+      filters.game = selectedGame;
+    }
+    // user_id filter can be added if needed, e.g., for "My Builds" page
+    return filters;
+  }, [selectedGame]);
+  
+  const sortParams = useMemo(() => ({
+    sortField: SORT_OPTIONS_CONVEX[currentSort].field,
+    sortOrder: SORT_OPTIONS_CONVEX[currentSort].order,
+  }), [currentSort]);
 
-  // Filter builds based on all criteria
+  // Fetch builds using useQuery
+  const allBuilds = useQuery(api.builds.getAll, { 
+    filters: queryFilters,
+    sortField: sortParams.sortField,
+    sortOrder: sortParams.sortOrder,
+  });
+
+  // Client-side search filtering (can be moved server-side for larger datasets)
   const filteredBuilds = useMemo(() => {
-    return mockBuilds
-      .filter(build => {
-        const matchesSearch = searchQuery === '' || 
-          build.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          build.description.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!allBuilds) return [];
+    if (searchQuery === '') return allBuilds;
+    return allBuilds.filter(build =>
+      build.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (build.description && build.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      build.creatorUsername.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [allBuilds, searchQuery]);
+  
+  // Placeholder for tags, difficulty, playstyle - these would need to be stored in build_data or as separate fields
+  // const allTags = useMemo(() => Array.from(new Set(allBuilds?.flatMap(build => build.tags || []) || [])), [allBuilds]);
+  // const DIFFICULTY_OPTIONS = ["Beginner", "Intermediate", "Advanced", "Expert"]; // Example
+  // const PLAYSTYLE_OPTIONS = ["Aggressive", "Defensive", "Support", "Balanced"]; // Example
 
-        const matchesTag = filterTag === 'all' || build.tags.includes(filterTag);
-        
-        const matchesDifficulty = selectedDifficulty === 'all' || 
-          build.difficulty === selectedDifficulty;
 
-        const matchesPlaystyle = selectedPlaystyle === 'all' || 
-          build.playstyle === selectedPlaystyle;
-
-        return matchesSearch && matchesTag && matchesDifficulty && matchesPlaystyle;
-      })
-      .sort(SORT_OPTIONS[sortBy].fn);
-  }, [searchQuery, filterTag, selectedDifficulty, selectedPlaystyle, sortBy]);
+  if (allBuilds === undefined) {
+    return <div className="text-center py-12">Loading builds...</div>; // Or a spinner component
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <header className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-white">Popular Builds</h1>
-        <Link to="/create" className="btn-primary">
+        <h1 className="text-3xl font-bold text-white">Community Builds</h1>
+        <Link to="/builds/create" className="btn-primary"> {/* Updated Link */}
           Create Build
         </Link>
       </header>
 
-      {/* Search and Sort Bar */}
       <div className="flex flex-col sm:flex-row gap-4 p-4 card">
         <div className="flex-1">
           <input
             type="text"
-            placeholder="Search builds..."
+            placeholder="Search by title, description, creator..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input w-full"
@@ -103,11 +87,11 @@ export default function BuildsPage() {
         </div>
         <div className="flex gap-4">
           <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
+            value={currentSort}
+            onChange={(e) => setCurrentSort(e.target.value)}
             className="input bg-division-dark-light min-w-[150px]"
           >
-            {Object.entries(SORT_OPTIONS).map(([value, { label }]) => (
+            {Object.entries(SORT_OPTIONS_CONVEX).map(([value, { label }]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
@@ -116,88 +100,67 @@ export default function BuildsPage() {
             onClick={() => setShowFilters(!showFilters)}
             className={`btn ${showFilters ? 'btn-primary' : 'btn-secondary'}`}
           >
-            Filters {filteredBuilds.length !== mockBuilds.length && `(${filteredBuilds.length})`}
+            Filters 
+            {/* Display active filter count if any */}
+            {(selectedGame !== 'all') && `(1)`} 
           </button>
         </div>
       </div>
 
-      {/* Advanced Filters */}
       {showFilters && (
         <div className="p-4 card space-y-4">
-          {/* Tags */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-division-gray-light">Tags</h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={`btn ${filterTag === 'all' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setFilterTag('all')}
-              >
-                All
-              </button>
-              {allTags.map(tag => (
-                <button
-                  key={tag}
-                  type="button"
-                  className={`btn ${filterTag === tag ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setFilterTag(tag)}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Difficulty and Playstyle */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-division-gray-light">Difficulty</h3>
+              <h3 className="text-sm font-semibold text-division-gray-light">Game</h3>
               <select
-                value={selectedDifficulty}
-                onChange={(e) => setSelectedDifficulty(e.target.value)}
+                value={selectedGame}
+                onChange={(e) => setSelectedGame(e.target.value)}
                 className="input w-full"
               >
-                <option value="all">All Difficulties</option>
-                {DIFFICULTY_OPTIONS.map(diff => (
-                  <option key={diff} value={diff}>{diff}</option>
+                <option value="all">All Games</option>
+                {GAMES_OPTIONS.map(game => (
+                  <option key={game} value={game}>{game}</option>
                 ))}
               </select>
             </div>
+            {/* Add more filters here for tags, difficulty, playstyle if implemented in schema/query */}
+            {/* Example for tags (if build.tags is an array of strings)
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-division-gray-light">Playstyle</h3>
-              <select
-                value={selectedPlaystyle}
-                onChange={(e) => setSelectedPlaystyle(e.target.value)}
-                className="input w-full"
-              >
-                <option value="all">All Playstyles</option>
-                {PLAYSTYLE_OPTIONS.map(style => (
-                  <option key={style} value={style}>{style}</option>
-                ))}
-              </select>
+              <h3 className="text-sm font-semibold text-division-gray-light">Tags</h3>
+              ...
             </div>
+            */}
           </div>
         </div>
       )}
 
-      {/* Build Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredBuilds.map(build => (
-          <BuildCard key={build.id} build={build} />
-        ))}
-      </div>
-
-      {/* Empty State */}
-      {filteredBuilds.length === 0 && (
-        <div className="text-center py-12">
+      {filteredBuilds.length === 0 && !searchQuery && allBuilds?.length > 0 && (
+         <div className="text-center py-12">
           <h3 className="text-xl font-semibold text-division-gray-light mb-2">
-            No builds found
+            No builds match your current filter.
           </h3>
           <p className="text-division-gray">
-            Try adjusting your filters or search query
+            Try selecting a different game or clearing filters.
+          </p>
+        </div>
+      )}
+      
+      {filteredBuilds.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredBuilds.map(build => (
+            <BuildCard key={build._id} build={build} /> // Use build._id for Convex
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <h3 className="text-xl font-semibold text-division-gray-light mb-2">
+            No builds found.
+          </h3>
+          <p className="text-division-gray">
+            {searchQuery ? "Try a different search query." : "Why not create the first one?"}
           </p>
         </div>
       )}
     </div>
   );
-} 
+}

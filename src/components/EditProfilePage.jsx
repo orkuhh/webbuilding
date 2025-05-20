@@ -1,94 +1,107 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../lib/supabase';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 export default function EditProfilePage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const { user: authUser, isLoading: authLoading, isAuthenticated } = useAuth(); // Renamed user to authUser
+  
+  const currentUserProfile = useQuery(api.profiles.getCurrentUserProfile, isAuthenticated ? {} : "skip");
+  
+  const updateProfileMutation = useMutation(api.profiles.update);
+  const generateUploadUrlMutation = useMutation(api.profiles.generateUploadUrl);
+  const uploadAvatarUrlMutation = useMutation(api.profiles.uploadAvatarUrl);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
-    display_name: '',
-    bio: '',
-    discord_username: '',
-    twitter_username: '',
-    website_url: ''
+    username: '',
+    // bio: '', // Add if bio is part of your schema and form
+    // Other fields like discord, twitter, website can be added if in schema
   });
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+
 
   useEffect(() => {
-    async function loadProfile() {
-      try {
-        setLoading(true);
-        const { data, error } = await db.profiles.getById(user.id);
-        if (error) throw error;
-        
-        setFormData({
-          display_name: data.display_name || '',
-          bio: data.bio || '',
-          discord_username: data.discord_username || '',
-          twitter_username: data.twitter_username || '',
-          website_url: data.website_url || ''
-        });
-      } catch (e) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
+    if (currentUserProfile) {
+      setFormData({
+        username: currentUserProfile.username || '',
+        // bio: currentUserProfile.bio || '', 
+      });
+      if (currentUserProfile.avatar_url) {
+        setAvatarPreview(currentUserProfile.avatar_url);
       }
     }
-
-    if (user) {
-      loadProfile();
-    }
-  }, [user]);
+  }, [currentUserProfile]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleAvatarChange = async (e) => {
+  const handleAvatarFileChange = (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setSaving(true);
-      const { error } = await db.profiles.uploadAvatar(user.id, file);
-      if (error) throw error;
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSaving(false);
+    if (file) {
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+    setError(null);
+    setSaving(true);
+
     try {
-      setSaving(true);
-      const { error } = await db.profiles.update(user.id, formData);
-      if (error) throw error;
+      // 1. Update text-based profile data
+      if (formData.username !== currentUserProfile?.username) { // Only update if changed
+        await updateProfileMutation({ username: formData.username });
+      }
+      // Add other fields like bio if they are part of the form & mutation
+
+      // 2. Handle avatar upload if a new file is selected
+      if (avatarFile) {
+        const postUrl = await generateUploadUrlMutation();
+        const result = await fetch(postUrl, {
+          method: "POST",
+          headers: { "Content-Type": avatarFile.type },
+          body: avatarFile,
+        });
+        const { storageId } = await result.json();
+        await uploadAvatarUrlMutation({ storageId });
+      }
       
-      navigate(`/profile/${user.user_metadata.username}`);
-    } catch (e) {
-      setError(e.message);
+      // Navigate to profile page after successful save
+      // Ensure username from profile (which might have been updated) is used for navigation
+      const updatedProfile = await currentUserProfile; // Re-fetch or use returned data if mutation provides it
+      navigate(`/profile/${formData.username || updatedProfile?.username}`);
+
+    } catch (err) {
+      console.error("Failed to update profile:", err);
+      setError(err.message || "An unexpected error occurred.");
     } finally {
       setSaving(false);
     }
   };
+  
+  const isLoading = authLoading || currentUserProfile === undefined;
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-division-orange" />
       </div>
     );
   }
+  
+  if (!isAuthenticated || !currentUserProfile) {
+     navigate('/login'); // Redirect if not authenticated or profile not loaded
+     return null;
+  }
+
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -104,15 +117,17 @@ export default function EditProfilePage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Avatar Upload */}
         <div className="card p-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Profile Picture
           </label>
+          {avatarPreview && (
+            <img src={avatarPreview} alt="Avatar Preview" className="w-24 h-24 rounded-full object-cover mb-4" />
+          )}
           <input
             type="file"
             accept="image/*"
-            onChange={handleAvatarChange}
+            onChange={handleAvatarFileChange}
             className="block w-full text-sm text-gray-400
               file:mr-4 file:py-2 file:px-4
               file:rounded-full file:border-0
@@ -122,93 +137,29 @@ export default function EditProfilePage() {
           />
         </div>
 
-        {/* Display Name */}
         <div className="card p-6">
-          <label htmlFor="display_name" className="block text-sm font-medium text-gray-300 mb-2">
-            Display Name
+          <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+            Username
           </label>
           <input
             type="text"
-            id="display_name"
-            name="display_name"
-            value={formData.display_name}
+            id="username"
+            name="username"
+            value={formData.username}
             onChange={handleChange}
             className="mt-1 block w-full rounded-lg bg-division-dark-lighter border border-gray-600 text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-division-orange"
-            placeholder="How should we call you?"
+            placeholder="Your unique username"
           />
         </div>
 
-        {/* Bio */}
-        <div className="card p-6">
-          <label htmlFor="bio" className="block text-sm font-medium text-gray-300 mb-2">
-            Bio
-          </label>
-          <textarea
-            id="bio"
-            name="bio"
-            value={formData.bio}
-            onChange={handleChange}
-            rows={4}
-            className="mt-1 block w-full rounded-lg bg-division-dark-lighter border border-gray-600 text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-division-orange"
-            placeholder="Tell us about yourself..."
-          />
-        </div>
+        {/* Add other fields like Bio here if needed */}
+        {/* <div className="card p-6"> ... Bio textarea ... </div> */}
+        {/* Add social links fields here if needed */}
 
-        {/* Social Links */}
-        <div className="card p-6 space-y-4">
-          <h3 className="text-lg font-medium text-white">Social Links</h3>
-          
-          <div>
-            <label htmlFor="discord_username" className="block text-sm font-medium text-gray-300 mb-2">
-              Discord Username
-            </label>
-            <input
-              type="text"
-              id="discord_username"
-              name="discord_username"
-              value={formData.discord_username}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-lg bg-division-dark-lighter border border-gray-600 text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-division-orange"
-              placeholder="Your Discord username"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="twitter_username" className="block text-sm font-medium text-gray-300 mb-2">
-              Twitter Username
-            </label>
-            <input
-              type="text"
-              id="twitter_username"
-              name="twitter_username"
-              value={formData.twitter_username}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-lg bg-division-dark-lighter border border-gray-600 text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-division-orange"
-              placeholder="Your Twitter username (without @)"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="website_url" className="block text-sm font-medium text-gray-300 mb-2">
-              Website
-            </label>
-            <input
-              type="url"
-              id="website_url"
-              name="website_url"
-              value={formData.website_url}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-lg bg-division-dark-lighter border border-gray-600 text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-division-orange"
-              placeholder="https://your-website.com"
-            />
-          </div>
-        </div>
-
-        {/* Submit Buttons */}
         <div className="flex justify-end gap-4">
           <button
             type="button"
-            onClick={() => navigate(`/profile/${user.user_metadata.username}`)}
+            onClick={() => navigate(`/profile/${currentUserProfile.username}`)}
             className="btn-secondary"
             disabled={saving}
           >
@@ -229,4 +180,4 @@ export default function EditProfilePage() {
       </form>
     </div>
   );
-} 
+}
